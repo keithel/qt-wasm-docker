@@ -1,0 +1,8 @@
+#!/bin/bash
+
+[[ $# -gt 0 ]] || { echo "Error: No arguments provided. Please provide pid."; exit 1; }
+
+sleep 5
+echo "send_sigterm sending SIGTERM and SIGINT"
+kill -TERM $1
+kill -INT $1

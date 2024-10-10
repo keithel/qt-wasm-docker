@@ -1,0 +1,71 @@
+#!/bin/bash
+
+set -e -u
+
+# Check if at least one argument is provided
+[[ $# -gt 0 ]] || { echo "Error: No arguments provided. Please provide project name."; exit 1; }
+name=$1
+containerport=8000
+hostport=8000
+
+echo "<!DOCTYPE html><html><head><meta http-equiv=\"refresh\" content=\"0; url=./app${name}.html\"></head></html>" > index.html
+
+cat <<EOF > send_sigterm
+#!/bin/sh
+sleep 5
+echo "send_sigterm sending SIGTERM and SIGINT"
+kill -TERM \$1
+kill -INT \$1
+EOF
+
+cat <<EOF > start
+#!/bin/sh
+
+handle_sigterm() {
+    echo "Handling TERM signal, killing \$process_pid"
+    kill -TERM \$process_pid
+}
+trap handle_sigterm TERM
+
+echo "My PID is \$\$"
+python -m http.server $containerport -d /app &
+process_pid=\$!
+
+echo "python process pid is \$process_pid"
+wait \$process_pid
+EOF
+
+cat <<EOF > Dockerfile
+FROM alpine:latest
+RUN apk add --no-cache python3 tini
+#FROM debian:latest
+#RUN apt update && apt install -y python3 python-is-python3 tini
+RUN mkdir app
+COPY --chmod=0775 start /
+COPY --chmod=0775 send_sigterm /
+COPY app${name}.html app/
+COPY app${name}.js app/
+COPY app${name}.wasm app/
+COPY qtloader.js app/
+COPY qtlogo.svg app/
+copy index.html app/
+
+EXPOSE 8000
+#STOPSIGNAL SIGINT
+ENTRYPOINT ["tini", "-v", "--"]
+CMD [ "/start" ]
+#CMD [ "python", "-m", "http.server", "$containerport", "-d", "/app" ]
+EOF
+
+imagename="kkyzivat/wasm-server-${name}"
+docker build -t ${imagename}:0.1 -t ${imagename}:latest .
+
+cat <<EOF > compose.yaml
+services:
+    app:
+        image: ${imagename}
+        ports:
+            - ${hostport}:${containerport}
+#        command: [ "/bin/sh" ]
+EOF
+#docker-compose run --rm app

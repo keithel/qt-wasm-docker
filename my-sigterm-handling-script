@@ -1,0 +1,15 @@
+#!/bin/bash
+
+handle_sigterm() {
+    echo "handling TERM signal"
+    kill -TERM $sleep_pid
+    exit
+}
+
+trap handle_sigterm TERM
+echo "My pid is $$"
+python -c "import time; time.sleep(30)" &
+sleep_pid=$!
+echo "sleep is $sleep_pid"
+
+wait $sleep_pid
